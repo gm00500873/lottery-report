@@ -22,7 +22,31 @@
   --pair:#4caf50;
   --pair2:#66bb6a;
 }
-body{background:var(--bg);color:var(--text);font-family:'Segoe UI','Microsoft JhengHei','PingFang TC',sans-serif;min-height:100vh;padding-bottom:40px}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI','Microsoft JhengHei','PingFang TC',sans-serif;min-height:100vh;padding-bottom:40px;padding-top:64px}
+
+/* Data Status Bar */
+#dataBar{position:fixed;top:0;left:0;right:0;z-index:999;background:#0a0e14;border-bottom:1px solid #1e2a38;display:flex;align-items:stretch;height:64px}
+.db-region{flex:1;display:flex;align-items:center;gap:10px;padding:0 16px;border-right:1px solid #1e2a38}
+.db-region:last-child{border-right:none}
+.db-label{font-size:0.72em;color:var(--text-dim);white-space:nowrap}
+.db-date{font-size:0.78em;font-weight:600;white-space:nowrap}
+.db-date.ok{color:#4caf50}
+.db-date.warn{color:#ff9800}
+.db-date.stale{color:#f44336}
+.db-nums{display:flex;flex-wrap:wrap;gap:4px;flex:1}
+.db-province{display:flex;align-items:center;gap:4px;background:rgba(255,255,255,0.04);border-radius:4px;padding:2px 7px;font-size:0.76em}
+.db-pname{color:var(--text-dim);font-size:0.88em}
+.db-num{color:var(--gold);font-weight:700;font-size:1.05em}
+.db-lag{font-size:0.68em;padding:1px 5px;border-radius:3px;white-space:nowrap;align-self:center}
+.db-lag.ok{background:rgba(76,175,80,0.15);color:#4caf50}
+.db-lag.warn{background:rgba(255,152,0,0.15);color:#ff9800}
+.db-lag.stale{background:rgba(244,67,54,0.15);color:#f44336}
+@media(max-width:768px){
+  #dataBar{height:auto;flex-direction:column}
+  body{padding-top:0}
+  .db-region{border-right:none;border-bottom:1px solid #1e2a38;padding:6px 12px}
+  .db-region:last-child{border-bottom:none}
+}
 a{color:var(--gold)}
 
 /* Header */
@@ -123,6 +147,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;heigh
 </style>
 </head>
 <body>
+<div id="dataBar"></div>
 <div class="header">
 <h1>越南彩票冷熱號離線報表</h1>
 <div class="subtitle">
@@ -478,8 +503,52 @@ window.refresh=function(){
 
 window.onRegionChange=function(){updateProvs();refresh();};
 
+/* ========== DATA STATUS BAR ========== */
+function renderDataBar(){
+  const today=new Date();
+  const regions=[
+    {key:'xsmn',label:'南部 Miền Nam'},
+    {key:'xsmt',label:'中部 Miền Trung'},
+    {key:'xsmb',label:'北部 Miền Bắc'}
+  ];
+  const bar=document.getElementById('dataBar');
+  bar.innerHTML='';
+  regions.forEach(({key,label})=>{
+    const dates=Object.keys(D[key]).sort().reverse();
+    const latestDate=dates[0]||'';
+    // calc lag days
+    let lagDays=0,lagClass='ok',lagText='最新';
+    if(latestDate){
+      const ld=new Date(latestDate);
+      lagDays=Math.round((today-ld)/(1000*60*60*24));
+      if(lagDays>=3){lagClass='stale';lagText='⚠️ 落後'+lagDays+'天';}
+      else if(lagDays>=1){lagClass='warn';lagText='落後'+lagDays+'天';}
+      else{lagClass='ok';lagText='✓ 最新';}
+    }
+    // get all provinces on latest date with their ĐB
+    const dayData=D[key][latestDate]||{};
+    const provItems=Object.entries(dayData).map(([pc,prizes])=>{
+      const num=prizes['gdb']?prizes['gdb'][0]:null;
+      const name=(P[key]&&P[key][pc])||pc;
+      // short name: remove common prefixes
+      const shortName=name.replace(/^(Thành phố |TP\. )/,'').replace(/Hồ Chí Minh/,'HCM');
+      return {shortName,num};
+    }).filter(x=>x.num!==null);
+
+    const fmtD=latestDate?latestDate.split('-').reverse().join('/'):'—';
+    const div=document.createElement('div');
+    div.className='db-region';
+    const numsHtml=provItems.map(({shortName,num})=>
+      `<span class="db-province"><span class="db-pname">${shortName}</span><span class="db-num">${String(num).padStart(2,'0')}</span></span>`
+    ).join('');
+    div.innerHTML=`<div style="display:flex;flex-direction:column;gap:2px;min-width:80px"><span class="db-label">${label}</span><span class="db-date ${lagClass}">${fmtD}</span><span class="db-lag ${lagClass}">${lagText}</span></div><div class="db-nums">${numsHtml}</div>`;
+    bar.appendChild(div);
+  });
+}
+
 /* ========== INIT ========== */
 updateProvs();
+renderDataBar();
 refresh();
 })();
 </script>
